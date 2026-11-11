@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}纸迹工作台{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">纸迹</span><span>货源与验样工作台</span></a>
+    <nav><a href="/">今日待办</a><a href="/candidates">找货源</a><a href="/#margin">核价</a></nav>
+    <span class="mode">真实数据模式</span>
+  </header>
+  {% if request.query_params.get('message') %}<div class="notice">{{ request.query_params.get('message') }}</div>{% endif %}
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>
+

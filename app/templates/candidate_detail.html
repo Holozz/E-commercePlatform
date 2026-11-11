@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }} · 纸迹{% endblock %}
+{% block content %}
+<section class="page-head"><div><a class="back" href="/candidates">返回候选清单</a><h1>{{ item.title }}</h1><p>{% if item.source_url.startswith('http') %}<a href="{{ item.source_url }}" target="_blank" rel="noreferrer">查看原始来源</a>{% else %}线下人工录入{% endif %} · {{ item.status }}</p></div><div class="stamp {{ 'approved' if item.is_whitelisted else '' }}">{{ '验样放行' if item.is_whitelisted else '未放行' }}</div></section>
+<div class="detail-grid">
+  <section class="panel"><h2>商品事实</h2><form class="form-grid" method="post" action="/candidates/{{ item.id }}/facts">
+    <label>SKU<input name="sku" value="{{ item.sku or '' }}"></label><label>尺寸（毫米）<input name="size_mm" value="{{ item.size_mm or '' }}" placeholder="148 × 210"></label><label>张数<input name="sheet_count" type="number" value="{{ item.sheet_count or '' }}"></label><label>页数<input name="page_count" type="number" value="{{ item.page_count or '' }}"></label><label>纸张克重<input name="paper_gsm" type="number" value="{{ item.paper_gsm or '' }}"></label><label>内页类型<input name="ruling" value="{{ item.ruling or '' }}"></label><label>装订<input name="binding" value="{{ item.binding or '' }}"></label><label>封面材质<input name="cover_material" value="{{ item.cover_material or '' }}"></label><label>包装本数<input name="pack_quantity" type="number" value="{{ item.pack_quantity or '' }}"></label><label>单本重量（克）<input name="weight_grams" type="number" value="{{ item.weight_grams or '' }}"></label><label>商家是否声明代发<select name="dropship_claimed"><option value="unknown">待确认</option><option value="yes" {% if item.dropship_claimed is sameas true %}selected{% endif %}>是（待核验）</option><option value="no" {% if item.dropship_claimed is sameas false %}selected{% endif %}>否</option></select></label><button>保存商品事实</button>
+  </form></section>
+  <aside class="panel evidence"><h2>证据链</h2>{% for ev in item.evidences %}<article><time>{{ ev.captured_at.strftime('%Y-%m-%d %H:%M') }}</time><p>{{ ev.excerpt }}</p>{% if ev.source_url.startswith('http') %}<a href="{{ ev.source_url }}" target="_blank" rel="noreferrer">打开来源</a>{% else %}<span class="hint">线下记录</span>{% endif %}</article>{% endfor %}</aside>
+</div>
+<div class="two-col">
+  <section class="panel"><h2>新增报价快照</h2><form method="post" action="/candidates/{{ item.id }}/quotes"><label>对应 SKU<input name="sku" required value="{{ item.sku or '' }}"></label><label>起订数量<input name="quantity_from" type="number" min="1" value="1" required></label><label>单价（元）<input name="unit_cost" type="number" step="0.01" required></label><label>本单运费（元）<input name="shipping_cost" type="number" step="0.01"></label><label>报价有效期<input name="valid_until" type="date"></label><button>保存报价</button></form>
+    {% for q in item.quotes %}<div class="record"><strong>¥{{ q.unit_cost }}</strong> / {{ q.sku }}，{{ q.quantity_from }} 件起，运费 {{ '待确认' if q.shipping_cost is none else '¥' ~ q.shipping_cost }}</div>{% endfor %}
+  </section>
+  <section class="panel"><h2>记录实物验样</h2><form method="post" action="/candidates/{{ item.id }}/samples"><label>结论<select name="verdict"><option>待复核</option><option>通过</option><option>不通过</option></select></label><label>实测尺寸<input name="measured_size_mm"></label><label>实测张数<input name="measured_sheet_count" type="number"></label><label>包装检查<input name="packaging_result"></label><label>试写结果<input name="writing_result"></label><label>备注<textarea name="notes" rows="3"></textarea></label><button>保存验样结论</button></form>
+    {% for s in item.samples %}<div class="record"><strong>{{ s.verdict }}</strong> · {{ s.checked_at.strftime('%Y-%m-%d') }}<br>{{ s.notes or '无补充说明' }}</div>{% endfor %}
+  </section>
+</div>
+{% endblock %}
+

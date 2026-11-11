@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}找货源 · 纸迹{% endblock %}
+{% block content %}
+<section class="page-head"><div><h1>找货源</h1><p>只保存真实链接、来源时间和证据摘要。</p></div></section>
+<div class="two-col input-zone">
+  <section class="panel"><h2>运行真实检索</h2><form method="post" action="/search"><label>检索词<input name="query" value="A5 横线本 现货 一件代发" required></label><button>检索并保存候选</button></form><p class="hint">需要在服务端配置 BRAVE_SEARCH_API_KEY；没有配置时会明确提示未连接。</p></section>
+  <section class="panel"><h2>录入线上或线下线索</h2><form method="post" action="/candidates"><label>商品名称<input name="title" required></label><label>来源链接（线下货源可留空）<input name="source_url" type="url"></label><label>供应商<input name="supplier_name"></label><label>证据摘要或线下报价说明<textarea name="excerpt" rows="3"></textarea></label><button>保存候选</button></form></section>
+</div>
+<section class="panel table-panel"><div class="panel-head"><h2>候选清单</h2><span>{{ items|length }} 条</span></div>
+  {% if items %}<div class="table-wrap"><table><thead><tr><th>商品</th><th>供应商</th><th>规格</th><th>状态</th><th>验样放行</th></tr></thead><tbody>{% for item in items %}<tr><td><a class="item-link" href="/candidates/{{ item.id }}">{{ item.title }}</a><small>{{ item.source_type }}</small></td><td>{{ item.supplier.name if item.supplier else '待确认' }}</td><td>{{ item.size_mm or '尺寸待补' }} / {{ item.sheet_count or '?' }} 张</td><td><span class="status">{{ item.status }}</span></td><td>{{ '已放行' if item.is_whitelisted else '否' }}</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<p class="empty">候选清单还是空的。运行真实检索，或录入一个已有来源。</p>{% endif %}
+</section>
+{% endblock %}
+

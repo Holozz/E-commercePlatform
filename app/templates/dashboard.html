@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div><p>2026 试卖批次</p><h1>把每一本候选，<br>查到有据可依。</h1></div>
+  <div class="hero-note">当前阶段：货源发现、规格核对、核价与验样。未验样通过的商品不会进入履约白名单。</div>
+</section>
+<section class="ledger stats">
+  <div><strong>{{ stats.candidates }}</strong><span>候选商品</span></div>
+  <div><strong>{{ stats.pending }}</strong><span>待补全事项</span></div>
+  <div><strong>{{ stats.sampled }}</strong><span>验样记录</span></div>
+  <div><strong>{{ stats.whitelisted }}</strong><span>履约白名单</span></div>
+</section>
+<div class="two-col">
+  <section class="panel"><div class="panel-head"><h2>今天先处理</h2><a href="/candidates">查看全部候选</a></div>
+    {% if tasks %}<ol class="task-list">{% for task in tasks %}<li><span>{{ task.task_type }}</span><p>{{ task.reason }}</p>{% if task.candidate_id %}<a href="/candidates/{{ task.candidate_id }}">打开候选</a>{% endif %}</li>{% endfor %}</ol>
+    {% else %}<p class="empty">暂无待办。先添加候选或运行一次真实检索。</p>{% endif %}
+  </section>
+  <section class="panel connection"><h2>连接状态</h2>
+    <dl><div><dt>PostgreSQL</dt><dd class="ok">已连接</dd></div><div><dt>Brave Search</dt><dd class="{{ 'ok' if settings.brave_search_api_key else 'warn' }}">{{ '已配置' if settings.brave_search_api_key else '未连接' }}</dd></div><div><dt>AI 规格提取</dt><dd class="warn">待接入</dd></div></dl>
+    <p>未连接服务不会返回演示结果。你仍可录入真实链接和线下报价。</p>
+  </section>
+</div>
+<section class="panel" id="margin"><div class="panel-head"><h2>单笔贡献利润核算</h2><span>空白费用不会按 0 处理</span></div>
+  <form class="calc-grid" method="post" action="/margin"><label>卖家应收<input name="revenue" type="number" step="0.01" required></label><label>采购成本<input name="purchase" type="number" step="0.01"></label><label>物流包装<input name="shipping_packaging" type="number" step="0.01"></label><label>平台费用<input name="platform_fees" type="number" step="0.01"></label><label>广告分摊<input name="ad_allocation" type="number" step="0.01"></label><label>售后损失<input name="after_sales_loss" type="number" step="0.01"></label><button>计算</button></form>
+</section>
+{% endblock %}
+
