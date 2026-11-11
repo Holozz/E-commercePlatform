@@ -16,7 +16,7 @@
     {% else %}<p class="empty">暂无待办。先添加候选或运行一次真实检索。</p>{% endif %}
   </section>
   <section class="panel connection"><h2>连接状态</h2>
-    <dl><div><dt>PostgreSQL</dt><dd class="ok">已连接</dd></div><div><dt>Brave Search</dt><dd class="{{ 'ok' if settings.brave_search_api_key else 'warn' }}">{{ '已配置' if settings.brave_search_api_key else '未连接' }}</dd></div><div><dt>AI 规格提取</dt><dd class="warn">待接入</dd></div></dl>
+    <dl><div><dt>数据库</dt><dd class="ok">已连接</dd></div><div><dt>Tavily Search</dt><dd class="ok">{{ '已配置专用密钥' if settings.tavily_api_key else '共享试用模式' }}</dd></div><div><dt>AI 规格提取</dt><dd class="{{ 'ok' if settings.openai_api_key else 'warn' }}">{{ settings.openai_model if settings.openai_api_key else '未连接' }}</dd></div></dl>
     <p>未连接服务不会返回演示结果。你仍可录入真实链接和线下报价。</p>
   </section>
 </div>

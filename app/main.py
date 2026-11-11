@@ -15,7 +15,17 @@ from sqlalchemy.orm import Session, selectinload
 from .config import settings
 from .db import Base, engine, get_db
 from .models import Candidate, Evidence, Quote, SampleRecord, Supplier, WorkTask
-from .services import SearchUnavailable, calculate_margin, record_sample, run_brave_search
+from .services import (
+    IntegrationUnavailable,
+    PageReadError,
+    SearchUnavailable,
+    apply_extraction,
+    calculate_margin,
+    extract_product_facts,
+    fetch_public_page,
+    record_sample,
+    run_search,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -93,7 +103,7 @@ def add_candidate(
 @app.post("/search")
 def search(query: str = Form(...), db: Session = Depends(get_db)):
     try:
-        run = run_brave_search(db, query.strip())
+        run = run_search(db, query.strip())
     except SearchUnavailable as exc:
         return redirect("/candidates", str(exc))
     message = f"检索完成，新增 {run.result_count} 条候选" if run.status == "成功" else f"检索失败：{run.error}"
@@ -119,14 +129,92 @@ def update_facts(
     db: Session = Depends(get_db),
 ):
     item = db.get(Candidate, candidate_id)
+    before = {
+        field: getattr(item, field)
+        for field in ("sheet_count", "page_count", "paper_gsm", "pack_quantity", "weight_grams", "sku", "size_mm", "ruling", "binding", "cover_material", "dropship_claimed")
+    }
     for field, value in {"sheet_count": sheet_count, "page_count": page_count, "paper_gsm": paper_gsm, "pack_quantity": pack_quantity, "weight_grams": weight_grams}.items():
         setattr(item, field, int(value) if value.strip() else None)
     for field, value in {"sku": sku, "size_mm": size_mm, "ruling": ruling, "binding": binding, "cover_material": cover_material}.items():
         setattr(item, field, value.strip() or None)
     item.dropship_claimed = {"yes": True, "no": False}.get(dropship_claimed)
+    if any(getattr(item, field) != value for field, value in before.items()):
+        item.is_whitelisted = False
     item.status = "待报价"
     db.commit()
     return redirect(f"/candidates/{candidate_id}", "商品事实已更新")
+
+
+@app.post("/candidates/{candidate_id}/fetch")
+def fetch_candidate_page(candidate_id: int, db: Session = Depends(get_db)):
+    item = db.get(Candidate, candidate_id)
+    if not item.source_url.startswith(("http://", "https://")):
+        return redirect(f"/candidates/{candidate_id}", "线下货源没有可读取的网页")
+    try:
+        final_url, page_text = fetch_public_page(item.source_url)
+    except PageReadError as exc:
+        existing = db.scalar(
+            select(WorkTask).where(
+                WorkTask.candidate_id == candidate_id,
+                WorkTask.task_type == "页面读取受阻",
+                WorkTask.status == "待处理",
+            )
+        )
+        if existing:
+            existing.reason = str(exc)
+        else:
+            db.add(WorkTask(candidate_id=candidate_id, task_type="页面读取受阻", reason=str(exc)))
+        db.commit()
+        return redirect(f"/candidates/{candidate_id}", str(exc))
+    db.add(Evidence(candidate_id=candidate_id, source_url=final_url, excerpt=f"[页面正文]\n{page_text}"))
+    item.status = "页面已读取"
+    db.commit()
+    return redirect(f"/candidates/{candidate_id}", "页面正文已读取并保存")
+
+
+@app.post("/candidates/{candidate_id}/extract")
+def extract_candidate(candidate_id: int, db: Session = Depends(get_db)):
+    item = db.get(Candidate, candidate_id)
+    evidence = db.scalar(
+        select(Evidence)
+        .where(Evidence.candidate_id == candidate_id, Evidence.excerpt.startswith("[页面正文]"))
+        .order_by(Evidence.id.desc())
+    )
+    if not evidence:
+        return redirect(f"/candidates/{candidate_id}", "请先读取商品页面，再运行 AI 提取")
+    try:
+        extraction = extract_product_facts(evidence.excerpt)
+    except IntegrationUnavailable as exc:
+        return redirect(f"/candidates/{candidate_id}", str(exc))
+    changed = apply_extraction(item, extraction)
+    supplier_fact = next(
+        (
+            fact
+            for fact in extraction.facts
+            if fact.field == "supplier_name" and fact.value and fact.evidence_text
+        ),
+        None,
+    )
+    if supplier_fact and item.supplier is None:
+        supplier = db.scalar(select(Supplier).where(Supplier.name == supplier_fact.value.strip()))
+        if not supplier:
+            supplier = Supplier(name=supplier_fact.value.strip())
+            db.add(supplier)
+        item.supplier = supplier
+        item.is_whitelisted = False
+        item.status = "AI 提取待复核"
+        changed.append("supplier_name")
+    evidence_lines = [
+        f"{fact.field} = {fact.value}；证据：{fact.evidence_text}"
+        for fact in extraction.facts
+        if fact.value is not None and fact.evidence_text
+    ]
+    summary = "\n".join(
+        [f"[AI 提取：{settings.openai_model}]", *evidence_lines, f"缺失：{'、'.join(extraction.missing_fields) or '无'}", f"冲突：{'、'.join(extraction.conflicts) or '无'}"]
+    )
+    db.add(Evidence(candidate_id=candidate_id, source_url=evidence.source_url, excerpt=summary))
+    db.commit()
+    return redirect(f"/candidates/{candidate_id}", f"AI 提取完成，更新 {len(changed)} 个字段；请人工复核")
 
 
 @app.post("/candidates/{candidate_id}/quotes")
